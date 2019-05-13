@@ -1,6 +1,5 @@
 [[source]]
 name = "pypi"
-# url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 url = "https://mirrors.aliyun.com/pypi/simple"
 verify_ssl = true
 
@@ -13,7 +12,6 @@ opencv-contrib-python = "*"
 gevent = "*"
 numpy = "*"
 flask = "*"
-pycairo = "*"
 
 [requires]
 python_version = "3.7"

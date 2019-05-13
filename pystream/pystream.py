@@ -6,6 +6,7 @@ from urllib import request
 import requests
 import time
 import threading
+import hashlib
 # import m3u8
 # import json
 # import zlib
@@ -14,17 +15,43 @@ import threading
 
 class MyThread (threading.Thread):
 
-    def __init__(self, url, name, path):
+    def __init__(self, uid, url, name, path, filetype):
         threading.Thread.__init__(self)
+        self.uid = uid
         self.url = url
         self.name = name
         self.path = path
+        self.filetype = filetype
+        self.__running = threading.Event()
+        self.__running.set()
 
     def run(self):
-        stream_save(self.url, self.name, self.path)
+
+        try:
+            print('[INFO]正在缓存第%s号:%s 地址:%s' % (self.uid, self.name, self.url))
+            filename = os.path.join(self.path, self.name + '-' +
+                                    time.strftime("%Y%m%d%H%M%S", time.localtime()) + '.' + self.filetype)
+            r = requests.get(self.url, stream=True)
+            with open(filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
+                        f.flush()
+                    if not self.__running.isSet():
+                        print('[INFO]第%d号:%s缓存终止,结束退出.' % (self.uid, self.name))
+                        return True
+            print('[INFO]第%s号%s 地址:%s缓存结束.' % (self.uid, self.name, self.url))
+            return True
+
+        except Exception as e:
+            print('[INFO]第%s号%s 地址:%s缓存保存错误:%s' % (self.uid, self.name, self.url, e))
+            return False
+
+    def stop(self):
+        self.__running.clear()  # 设置running为false
 
 
-def stream_url_fetch(url, headers=None):
+def stream_url_fetch(url, upjson=None, headers=None):
 
     if not headers['token']:
         try:
@@ -38,7 +65,7 @@ def stream_url_fetch(url, headers=None):
             return False
 
     try:
-        req = requests.post(url,  headers=headers)
+        req = requests.post(url, json=upjson, headers=headers)
     except Exception as e:
         print('[INFO]%s访问失败:%s' %(url, e))
     try:
@@ -57,28 +84,49 @@ def stream_channel(url):
     return channels
 
 
-def stream_list(stream_data):
+def stream_get_list(data, stream_list, blackchannel, blacklist):
 
-    for stream in streams:
-        if ((re.sub(r'\..*$|json|\W', '', stream['platform_name']) not in blackchannel) and
+    m1 = hashlib.md5()
+    for stream in data['data']['lists']:
+        filename = stream['play_url'].split('/')[-1]
+        print(filename)
+        m1.update(filename.encode("utf-8"))
+        uid = m1.hexdigest()
+        if ((uid not in [d['uid'] for d in stream_list]) and
+            (re.sub(r'\..*$|json|\W', '', stream['platform_name']) not in blackchannel) and
                 (re.sub(r'\W', '', stream['title']) not in blacklist) and
-                (stream['play_url'] not in [d['url'] for d in stream_list]) and
                 (re.sub(r'\W', '', stream['title']) not in [d['name'] for d in stream_list])):
             if re.search('.flv', stream['play_url']):
-                stream_list.append({'id': i,
+                stream_list.append({'uid': uid,
                                     'type': 'flv',
                                     'channel': re.sub(r'\..*$|json|\W', '', stream['platform_name']),
                                     'name': re.sub(r'\W', '', stream['title']),
                                     'url': stream['play_url']})
             if re.search('.m3u8', stream['play_url']):
-                stream_list.append({'id': i,
+                stream_list.append({'uid': uid,
                                     'type': '.m3u8',
                                     'channel': re.sub(r'\..*$|json|\W', '', stream['platform_name']),
                                     'name': re.sub(r'\W', '', stream['title']),
                                     'url': stream['play_url']})
-            i += 1
 
 
+def download_file(uid, url, name, path, filetype):
+
+    try:
+        print('[INFO]正在缓存%d直播:%s' % (uid, name))
+        filename = os.path.join(path, name + '-' + time.strftime("%Y%m%d%H%M%S", time.localtime()) + '.'+filetype)
+        r = requests.get(url, stream=True)
+        with open(filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+                    f.flush()
+        print('[INFO]第%d号:%s缓存结束' % (uid, name))
+        return True
+
+    except Exception as e:
+        print('[INFO]%s 地址:%s缓存保存错误:%s' % (name, url, e))
+        return False
 
 
 def stream_save(url, name, path):
@@ -103,49 +151,51 @@ def main():
             return False
 
     url = 'http://jbp.qrjdfh.cn'
-    stream_m3u8_list = []
-    stream_flv_list = []
+
+    stream_list = []
     threads = []
+    blackchannel = ["xinzhilians"]
+    with open('blacklist.txt', 'r') as f:
+        blacklist = [re.sub(r'\W', '', line) for line in f.readlines()]
     token = None
     headers = {'Content-Type': 'application/json', 'token': token}
 
     try:
-
-
         for channel in channels:
-            if channel['name'] == 'zzzzjsontubaobao.txt':
                 upjson = {'name': channel['name']}
                 stream_data = stream_url_fetch(url+'live/anchors', upjson=upjson, headers=headers)
-                for stream in stream_data['data']['lists']:
-                    if re.search('.flv', stream['play_url']):
-                        stream_flv_list.append({'channel': channel['title'],
-                                            'name': stream['title'],
-                                            'url': stream['play_url']})
-                    if re.search('.m3u8', stream['play_url']):
-                        stream_m3u8_list.append({'channel': channel['title'],
-                                            'name': stream['title'],
-                                            'url': stream['play_url']})
+                stream_get_list(stream_data, stream_list, blackchannel, blacklist)
 
-        # threads = [MyThread() for i in range(stream_flv_list.count)]
-        #
-        # for t in threads:
-        #     t.url  = stream_save(stream_f['url'], stream_f['channel']+'-'+stream_f['name'], stream_path)
-        #     t.name =
-        #     t.path =
-
-        for stream_f in stream_flv_list:
-            threads.append(MyThread(stream_f['url'], stream_f['channel'] + '-' + stream_f['name'], stream_path))
+        for stream in stream_list:
+            threads.append(MyThread(stream['uid'], stream['url'],
+                                    stream['name'] + '-' + stream['channel'], stream_path, stream['type']))
+        print(len(threads))
         for t in threads:
             t.start()
-        # t.join()
 
-        # for stream_m in stream_m3u8_list:
-        #     stream = m3u8.Downloader(10)
-        #     stream.run(stream_m['url'], stream_path+'m3u8/')
+        count = threading.active_count()
+        while count > 1:
+            if not count == threading.active_count():
+                count = threading.active_count()
+                print(time.strftime("现在是:%Y%m%d %H:%M:%S", time.localtime()), '仍在缓存直播数:', count)
+                print([myT.name for myT in threading.enumerate()])
+            time.sleep(10)
 
     except Exception as e:
         print('获取列表数据错误：', e)
         return False
+    finally:
+        active_threads = threads
+        while len(active_threads) > 0:
+            for t in active_threads:
+                if t.is_alive():
+                    t.stop()
+                else:
+                    active_threads.remove(t)
+            print('仍在缓存直播:')
+            print([(myT.id, myT.name) for myT in active_threads])
+            time.sleep(10)
+        time.sleep(50)
 
 
 if __name__ == '__main__':
