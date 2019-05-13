@@ -62,7 +62,7 @@ def stream_url_fetch(url, upjson=None, headers=None):
             print('[INFO]登录成功,Token：', headers['token'])
         except Exception as e:
             print('[INFO]登录错误：', e)
-            return False
+            return ""
 
     try:
         req = requests.post(url, json=upjson, headers=headers)
@@ -155,47 +155,56 @@ def main():
     stream_list = []
     threads = []
     blackchannel = ["xinzhilians"]
-    with open('blacklist.txt', 'r') as f:
+
+    with open('blacklist.txt', 'r',encoding='utf-8') as f:
         blacklist = [re.sub(r'\W', '', line) for line in f.readlines()]
     token = None
     headers = {'Content-Type': 'application/json', 'token': token}
 
-    try:
-        for channel in channels:
-                upjson = {'name': channel['name']}
-                stream_data = stream_url_fetch(url+'live/anchors', upjson=upjson, headers=headers)
-                stream_get_list(stream_data, stream_list, blackchannel, blacklist)
+    # try:
 
-        for stream in stream_list:
-            threads.append(MyThread(stream['uid'], stream['url'],
-                                    stream['name'] + '-' + stream['channel'], stream_path, stream['type']))
-        print(len(threads))
-        for t in threads:
-            t.start()
+    channel_data = stream_url_fetch(url + 'live/index', headers=headers)
 
-        count = threading.active_count()
-        while count > 1:
-            if not count == threading.active_count():
-                count = threading.active_count()
-                print(time.strftime("现在是:%Y%m%d %H:%M:%S", time.localtime()), '仍在缓存直播数:', count)
-                print([myT.name for myT in threading.enumerate()])
-            time.sleep(10)
-
-    except Exception as e:
-        print('获取列表数据错误：', e)
+    if channel_data:
+        channels = channel_data['data']['lists']
+    else:
         return False
-    finally:
-        active_threads = threads
-        while len(active_threads) > 0:
-            for t in active_threads:
-                if t.is_alive():
-                    t.stop()
-                else:
-                    active_threads.remove(t)
-            print('仍在缓存直播:')
-            print([(myT.id, myT.name) for myT in active_threads])
-            time.sleep(10)
-        time.sleep(50)
+
+    for channel in channels:
+            upjson = {'name': channel['name']}
+            stream_data = stream_url_fetch(url+'live/anchors', upjson=upjson, headers=headers)
+            stream_get_list(stream_data, stream_list, blackchannel, blacklist)
+
+    for stream in stream_list:
+        threads.append(MyThread(stream['uid'], stream['url'],
+                                stream['name'] + '-' + stream['channel'], stream_path, stream['type']))
+    print(len(threads))
+    for t in threads:
+        t.start()
+
+    count = threading.active_count()
+    while count > 1:
+        if not count == threading.active_count():
+            count = threading.active_count()
+            print(time.strftime("现在是:%Y%m%d %H:%M:%S", time.localtime()), '仍在缓存直播数:', count)
+            print([myT.name for myT in threading.enumerate()])
+        time.sleep(10)
+
+    # except Exception as e:
+    #     print('获取列表数据错误：', e)
+    #     return False
+    # finally:
+    #     active_threads = threads
+    #     while len(active_threads) > 0:
+    #         for t in active_threads:
+    #             if t.is_alive():
+    #                 t.stop()
+    #             else:
+    #                 active_threads.remove(t)
+    #         print('仍在缓存直播:')
+    #         print([(myT.id, myT.name) for myT in active_threads])
+    #         time.sleep(10)
+    #     time.sleep(50)
 
 
 if __name__ == '__main__':
