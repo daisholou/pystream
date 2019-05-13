@@ -24,14 +24,21 @@ class MyThread (threading.Thread):
         stream_save(self.url, self.name, self.path)
 
 
-def stream_url_fetch(url, data=None, upjson=None, headers=None):
+def stream_url_fetch(url, headers=None):
+
+    if not headers['token']:
+        try:
+            server_url = '/'.join(url.split('/')[:-1]) + '/'
+            token_data = requests.post(server_url+'user/login',
+                                       json={'username': '1428579', 'password': '123456'})
+            headers['token'] = token_data['data']['token']
+            print('[INFO]登录成功,Token：', headers['token'])
+        except Exception as e:
+            print('[INFO]登录错误：', e)
+            return False
 
     try:
-        if headers:
-            req = requests.post(url, data=data, json=upjson, headers=headers)
-        else:
-            req = requests.post(url, data=data, json=upjson)
-
+        req = requests.post(url,  headers=headers)
     except Exception as e:
         print('[INFO]%s访问失败:%s' %(url, e))
     try:
@@ -39,6 +46,39 @@ def stream_url_fetch(url, data=None, upjson=None, headers=None):
     except Exception as e:
         print('[INFO]%s转JSON失败:%s' %(url, e))
         return ""
+
+
+def stream_channel(url):
+
+    channel_data = stream_url_fetch(url + 'live/index')
+
+    channels = channel_data['data']['lists']
+
+    return channels
+
+
+def stream_list(stream_data):
+
+    for stream in streams:
+        if ((re.sub(r'\..*$|json|\W', '', stream['platform_name']) not in blackchannel) and
+                (re.sub(r'\W', '', stream['title']) not in blacklist) and
+                (stream['play_url'] not in [d['url'] for d in stream_list]) and
+                (re.sub(r'\W', '', stream['title']) not in [d['name'] for d in stream_list])):
+            if re.search('.flv', stream['play_url']):
+                stream_list.append({'id': i,
+                                    'type': 'flv',
+                                    'channel': re.sub(r'\..*$|json|\W', '', stream['platform_name']),
+                                    'name': re.sub(r'\W', '', stream['title']),
+                                    'url': stream['play_url']})
+            if re.search('.m3u8', stream['play_url']):
+                stream_list.append({'id': i,
+                                    'type': '.m3u8',
+                                    'channel': re.sub(r'\..*$|json|\W', '', stream['platform_name']),
+                                    'name': re.sub(r'\W', '', stream['title']),
+                                    'url': stream['play_url']})
+            i += 1
+
+
 
 
 def stream_save(url, name, path):
@@ -56,32 +96,21 @@ def stream_save(url, name, path):
 
 def main():
 
-    stream_path = '/Users/Lou/python/works/pystream/stream/'
+    stream_path = os.path.join(os.getcwd(), 'stream')
     if not os.path.exists(stream_path):
         if not os.makedirs(stream_path):
             print('无法创建下载目录:', stream_path)
             return False
 
-    url = 'http://www.5588.cool/mobile/live/get_all_auto_proposed_anchors'
+    url = 'http://jbp.qrjdfh.cn'
     stream_m3u8_list = []
     stream_flv_list = []
     threads = []
     token = None
-    # token = '921bfc04cd1adfc6cab7957a9275260f'
-    if not token:
-        try:
-            token_data = stream_url_fetch(url+'user/login', upjson={'username': '1428579', 'password': '123456'})
-            token = token_data['data']['token']
-            print(token)
-        except Exception as e:
-            print('登录错误：', e)
-            return False
-
-    # print ({'token': token})
     headers = {'Content-Type': 'application/json', 'token': token}
+
     try:
-        channel_data = stream_url_fetch(url+'live/index')
-        channels = channel_data['data']['lists']
+
 
         for channel in channels:
             if channel['name'] == 'zzzzjsontubaobao.txt':
