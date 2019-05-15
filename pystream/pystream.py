@@ -38,7 +38,7 @@ class StreamThread (threading.Thread):
                 ts_list = []
                 with open(filename, 'wb') as f:
                     while self.__running.is_set():
-                        body = requests.get(self.url).text
+                        body = requests.get(self.url, timeout=10).text
                         print('第一层:', body)
                         if '#EXTM3U' not in body:
                             raise BaseException('非M3U8的链接')
@@ -51,7 +51,7 @@ class StreamThread (threading.Thread):
                                         self.url = get_base_url(self.url) + line
                                     else:
                                         self.url = self.url.rsplit('/', 1)[0] + '/' + line
-                                    content = requests.get(self.url).text
+                                    content = requests.get(self.url, timeout=10).text
                                     print('第二层:', content)
                                     body = content
 
@@ -86,7 +86,7 @@ class StreamThread (threading.Thread):
 
                         for ts in ts_url:
                             if ts not in ts_list:
-                                r = requests.get(ts)
+                                r = requests.get(ts, timeout=10)
                                 # print('%d完成%s的下载' % (time.time(), ts))
                                 f.write(r.content)
                                 f.flush()
@@ -95,7 +95,7 @@ class StreamThread (threading.Thread):
                             time.sleep(1)
 
             else:
-                r = requests.get(self.url, stream=True)
+                r = requests.get(self.url, stream=True, timeout=30)
                 with open(filename, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=1024):
                         if chunk:  # filter out keep-alive new chunks
