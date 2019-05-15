@@ -12,6 +12,7 @@ opencv-contrib-python = "*"
 gevent = "*"
 numpy = "*"
 flask = "*"
+m3u8 = "*"
 
 [requires]
 python_version = "3.7"

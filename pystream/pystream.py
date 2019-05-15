@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 # from bs4 import BeautifulSoup
 
 
-class MyThread (threading.Thread):
+class StreamThread (threading.Thread):
 
     def __init__(self, id, url, name, path, filetype):
         threading.Thread.__init__(self)
@@ -29,46 +29,79 @@ class MyThread (threading.Thread):
     def run(self):
 
         try:
-            print('[INFO]正在缓存第%d号:%s 地址:%s' % (self.id, self.name, self.url))
             filename = os.path.join(self.path, self.name + '-' +
                                     time.strftime("%Y%m%d%H%M%S", time.localtime()) + '.' + self.filetype)
-
+            print('[INFO]正在缓存第%d号:%s 地址:%s' % (self.id, self.name, self.url))
             if self.filetype == 'm3u8':
+                filename = filename.split('.')[0] + '.mp4'
+                print(filename)
+                ts_list = []
+                with open(filename, 'wb') as f:
+                    while self.__running.is_set():
+                        body = requests.get(self.url).text
+                        # print('第一层:', body)
+                        if "#EXTM3U" not in body:
+                            raise BaseException("非M3U8的链接")
 
-                print(self.url)
-                r = requests.get(self.url)
-                if r.ok:
-                    body = r.content.decode()
-                    print('第一层:', body)
-                    if "#EXTM3U" not in body:
-                        raise BaseException("非M3U8的链接")
+                        if "EXT-X-STREAM-INF" in body:  # 第一层
+                            file_line = body.split("\n")
+                            for line in file_line:
+                                if '.m3u8' in line:
+                                    self.url = self.url.rsplit("/", 1)[0] + "/" + line  # 拼出第二层m3u8的URL
+                                    content = requests.get(self.url).text
+                                    print('第二层:', content)
+                                    body = content
 
-                    if "EXT-X-STREAM-INF" in body:  # 第一层
-                        file_line = body.split("\n")
-                        for line in file_line:
-                            if '.m3u8' in line:
-                                self.url = self.url.rsplit("/", 1)[0] + "/" + line  # 拼出第二层m3u8的URL
+                        if "#EXT-X-TARGETDURATION" in body:
+                            duration = body.split('#EXT-X-TARGETDURATION:')[-1].split('\n')[0]
+                            get_time = time.time()
+                            print('持续时间:', duration)
 
-                    content = requests.get(self.url).text
-                    rint('第二层:', content)
-                    if content:
-                        ts_list = [urljoin(self.url, n.strip()) for n in body.split('\n') if
-                                   n and not n.startswith("#")]
-                        len_ts_list = len(ts_list)
-                        ts_list = zip(ts_list, [n for n in range(len_ts_list)])
-                        print(ts_list)
+                        if "#EXT-X-KEY" in body:  # 找解密Key
+                            line = body.split('##EXT-X-KEY:')[-1].split('\n')[0]
+                            method_pos = line.find("METHOD")
+                            comma_pos = line.find(",")
+                            method = line[method_pos:comma_pos].split('=')[1]
+                            print("Decode Method：", method)
+
+                            uri_pos = line.find("URI")
+                            quotation_mark_pos = line.rfind('"')
+                            key_path = line[uri_pos:quotation_mark_pos].split('"')[1]
+
+                            key_url = self.url.rsplit("/", 1)[0] + "/" + key_path  # 拼出key解密密钥URL
+                            res = requests.get(key_url)
+                            key = res.content
+
+                            print('key:', key)
+                            if len(key):
+                                print('目前不支持加密直播')
+                                return False
+
+                        ts_url = [urljoin(self.url, n.strip()) for n in body.split('\n')
+                                  if n and not n.startswith("#")]
+                        #  print([url.split('/')[-1] for url in ts_url])
+
+                        for ts in ts_url:
+                            if ts not in ts_list:
+                                r = requests.get(ts)
+                                print('%d完成%s的下载' % (time.time(), ts))
+                                f.write(r.content)
+                                f.flush()
+                                ts_list.append(ts)
+                        while time.time() < get_time+duration:
+                            time.sleep(1)
+
             else:
+                r = requests.get(self.url, stream=True)
+                with open(filename, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=1024):
+                        if chunk:  # filter out keep-alive new chunks
+                            f.write(chunk)
+                            f.flush()
+                        if not self.__running.isSet():
+                            print('[INFO]第%d号:%s缓存终止,结束退出.' % (self.id, self.name))
+                            return True
                 return False
-
-            r = requests.get(self.url, stream=True)
-            with open(filename, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1024):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
-                        f.flush()
-                    if not self.__running.isSet():
-                        print('[INFO]第%d号:%s缓存终止,结束退出.' % (self.id, self.name))
-                        return True
 
             print('[INFO]第%d号%s 地址:%s缓存结束.' % (self.id, self.name, self.url))
             return True
@@ -85,9 +118,11 @@ def stream_url_fetch(url, upjson=None, headers=None):
 
     if not headers['token']:
         try:
-            server_url = '/'.join(url.split('/')[:-1]) + '/'
-            token_data = requests.post(server_url+'mobile/user/login',
+            server_url = '/'.join(url.split('/')[:-2]) + '/'
+            print(server_url)
+            req = requests.post(server_url+'user/login',
                                        json={'username': '1428579', 'password': '123456'})
+            token_data = req.json()
             headers['token'] = token_data['data']['token']
             print('[INFO]登录成功,Token：', headers['token'])
         except Exception as e:
@@ -97,21 +132,12 @@ def stream_url_fetch(url, upjson=None, headers=None):
     try:
         req = requests.post(url, json=upjson, headers=headers)
     except Exception as e:
-        print('[ERR]%s访问失败:%s' %(url, e))
+        print('[ERR]%s访问失败:%s' % (url, e))
     try:
         return req.json()
     except Exception as e:
-        print('[ERR]%s转JSON失败:%s' %(url, e))
+        print('[ERR]%s转JSON失败:%s' % (url, e))
         return ""
-
-
-def stream_channel(url):
-
-    channel_data = stream_url_fetch(url + 'mobile/live/index')
-
-    channels = channel_data['data']['lists']
-
-    return channels
 
 
 def stream_get_list(data, platform, stream_list, blackchannel, blacklist):
@@ -121,20 +147,22 @@ def stream_get_list(data, platform, stream_list, blackchannel, blacklist):
         filename = stream['play_url'].split('/')[-1]
         filename = filename.split('?')[0]
         filetype = filename.split('.')[-1]
-        title = re.sub(r'\W', '', stream['title'])
-        m1.update(filename.encode("utf-8"))
-        uid = m1.hexdigest()
+        if filetype in ['m3u8']:
 
-        if ((uid not in [d['uid'] for d in stream_list]) and
-            (platform not in blackchannel) and
-                (title not in blacklist) and
-                (title not in [d['name'] for d in stream_list])):
-            stream_list.append({'id': len(stream_list)+1,
-                                'uid': uid,
-                                'type': filetype,
-                                'platform': platform,
-                                'name': title,
-                                'url': stream['play_url']})
+            title = re.sub(r'\W', '', stream['title'])
+            m1.update(filename.encode("utf-8"))
+            uid = m1.hexdigest()
+
+            if ((uid not in [d['uid'] for d in stream_list]) and
+                (platform not in blackchannel) and
+                    (title not in blacklist) and
+                    (title not in [d['name'] for d in stream_list])):
+                stream_list.append({'id': len(stream_list)+1,
+                                    'uid': uid,
+                                    'type': filetype,
+                                    'platform': platform,
+                                    'name': title,
+                                    'url': stream['play_url']})
 
 
 # def download_file(id, url, name, path, filetype):
@@ -168,6 +196,14 @@ def stream_get_list(data, platform, stream_list, blackchannel, blacklist):
 #         print('[ERR]%s 地址:%s缓存保存错误:%s' % (name, url, e))
 #         return False
 
+# def stream_channel(url):
+#
+#     channel_data = stream_url_fetch(url + 'mobile/live/index')
+#
+#     channels = channel_data['data']['lists']
+#
+#     return channels
+
 
 def main():
 
@@ -185,11 +221,11 @@ def main():
     # 获取黑名单
     blackchannel = ["xinzhilians"]
 
-    with open('blacklist.txt', 'r',encoding='utf-8') as f:
+    with open('blacklist.txt', 'r', encoding='utf-8') as f:
         blacklist = [re.sub(r'\W', '', line) for line in f.readlines()]
 
     # 设置token
-    token = '18bccf560c88fb5c90895ea18c329076'
+    token = 'c8735199ae441d9e169279d6287ab5b0'
     headers = {'Content-Type': 'application/json', 'token': token}
 
     try:
@@ -197,22 +233,25 @@ def main():
         channel_data = stream_url_fetch(url + 'mobile/live/index', headers=headers)
 
         if channel_data:
-            channels = channel_data['data']['lists']
+            channels = (d['name'] for d in channel_data['data']['lists'])
         else:
             print('[ERR]无法获取列表数据!')
             return False
         channels = list(set(channels))
-        print(channels)
+        # print(channels)
 
         for channel in channels:
-                upjson = {'name': channel['name']}
-                platform = re.sub(r'\..*$|json|\W', '', channel['name'])
+                upjson = {'name': channel}
+                platform = re.sub(r'\..*$|json|\W', '', channel)
                 stream_data = stream_url_fetch(url+'mobile/live/anchors', upjson=upjson, headers=headers)
                 stream_get_list(stream_data, platform, stream_list, blackchannel, blacklist)
 
+        # print(stream_list)
+
         for stream in stream_list:
-            threads.append(MyThread(stream['id'], stream['url'],
+            threads.append(StreamThread(stream['id'], stream['url'],
                                     stream['name'] + '-' + stream['platform'], stream_path, stream['type']))
+
         print(len(threads))
         for t in threads:
             t.start()

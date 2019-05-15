@@ -1,12 +1,15 @@
 # -*- coding: UTF-8 -*-
 
-import cv2
+# import cv2
 
 import streamlink
-import m3u8
+from pystream import StreamThread
+
+# import m3u8
 
 
 movie = 'https://www.huya.com/a16789'
+
 
 session = streamlink.Streamlink() #创建一个会话
 try:
@@ -30,8 +33,15 @@ lists = ['best', 'high', 'source', 'mobile', 'medium',  'low', 'worst']
 for l in lists:
     if l in streams:
         source = streams[l].url
-        print('[INFO]获得视频%s:%s' % (l,source))
+        print('[INFO]获得视频%s:%s' % (l, source))
         break
+
+a = StreamThread(1, source, 'test', 'stream/m3u8/', 'm3u8')
+
+a.run()
+
+
+
 
 # if source:
 #     vidcap = cv2.VideoCapture(source)
@@ -43,5 +53,5 @@ for l in lists:
 #         print('Read a new frame: ', success)
 #         count += 1
 
-downloader = m3u8.Downloader(50)
-downloader.run(source, '/Users/Lou/PycharmProjects/pydemo/pystream/stream/m3u8/')
+# downloader = m3u8.Downloader(50)
+# downloader.run(source, '/Users/Lou/PycharmProjects/pydemo/pystream/stream/m3u8/')
