@@ -1,27 +1,18 @@
-{% extends "base.html" %}
-{% import 'bootstrap/wtf.html' as wtf %}
+#.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <h1>频道列表</h1>
+    <ul>
+        {% for cl in channel %}
+            <li><a href="/{{cl.title}}"><img src="{{cl.img}}" /> </a></li>
+            <li>{{cl.title}}</li>
+            <li>----</li>
+        {% endfor %}
+    </ul>
 
-{% block app_content %}
-    <h1>Hi, {{ current_user.username }}!</h1>
-    {% if form %}
-    {{ wtf.quick_form(form) }}
-    <br>
-    {% endif %}
-    {% for post in posts %}
-        {% include '_post.html' %}
-    {% endfor %}
-    <nav aria-label="...">
-        <ul class="pager">
-            <li class="previous{% if not prev_url %} disabled{% endif %}">
-                <a href="{{ prev_url or '#' }}">
-                    <span aria-hidden="true">&larr;</span> Newer posts
-                </a>
-            </li>
-            <li class="next{% if not next_url %} disabled{% endif %}">
-                <a href="{{ next_url or '#' }}">
-                    Older posts <span aria-hidden="true">&rarr;</span>
-                </a>
-            </li>
-        </ul>
-    </nav>
-{% endblock %}
+</body>

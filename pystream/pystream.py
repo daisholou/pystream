@@ -143,6 +143,7 @@ def stream_url_fetch(url, upjson=None, headers=None):
         return ''
 
 
+
 def stream_get_list(data, platform, stream_list, blackchannel, blacklist):
 
     m1 = hashlib.md5()
@@ -204,13 +205,24 @@ def get_base_url(url):
 #         print('[ERR]%s 地址:%s缓存保存错误:%s' % (name, url, e))
 #         return False
 
-# def stream_channel(url):
-#
-#     channel_data = stream_url_fetch(url + 'mobile/live/index')
-#
-#     channels = channel_data['data']['lists']
-#
-#     return channels
+
+
+def stream_channel(url):
+
+    channel_data = stream_url_fetch(url + 'mobile/live/index')
+
+    channels = channel_data['data']['lists']
+
+    return channels
+
+
+def stream_list(channel):
+
+    up_json = {'name': channel['name']}
+    stream_data = stream_url_fetch(get_base_url(url) + '/mobile/live/anchors', upjson=up_json, headers=headers)
+
+    return stream_data['data']['lists']
+
 
 
 def main():

@@ -1,13 +1,31 @@
 # code = uft-8
 
-from flask import Flask
+import pystream_class
+from flask import Flask, render_template, request, redirect
 
 app = Flask(__name__)
+app.debug = True
+url = 'http://jbp.qrjdfh.cn/'
+ps = pystream_class.Box(url, token='3e1fc304b8c2c9fd41fd6d1b7c3f445f')
+ch = {}
+
 
 @app.route('/')
 def index():
-    return 'Hi beauty!'
+    global ch
+    channels = ps.channel()
+    for t in channels:
+        ch[t['title']] = t['name']
+    return render_template('index.html', channel=channels)
 
+
+@app.route('/<channel_title>')
+def stream_lists(channel_title):
+    stream_list = ps.list(ch[channel_title])
+    if stream_list:
+        return render_template('channel.html', stream_list=stream_list)
+    else:
+        return render_template('404.html')
 
 if __name__ == '__main__':
     app.run()
