@@ -8,7 +8,7 @@ from pystream import StreamThread
 # import m3u8
 
 
-movie = 'https://www.huya.com/a16789'
+movie = 'http://q.1y666.com:2100/20190405/qQmSQhlE/index.m3u8'
 
 
 session = streamlink.Streamlink() #创建一个会话
@@ -36,7 +36,7 @@ for l in lists:
         print('[INFO]获得视频%s:%s' % (l, source))
         break
 
-a = StreamThread(1, source, 'test', 'stream/m3u8/', 'm3u8')
+a = StreamThread(1, movie, 'test', 'stream/m3u8/', 'm3u8')
 
 a.run()
 
