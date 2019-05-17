@@ -1,19 +1,24 @@
-#.html
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <script type="text/javascript" src="js/video.min.js?v=1.0"></script>
+    <script type="text/javascript" src="js/videojs-contrib-hls.min.js"></script>
     <title>Title</title>
 </head>
 <body>
     <h1>直播列表</h1>
     <ul>
         {% for ls in stream_list %}
+        <li>
+            <div>
+                <video id=example-video width="100%" height="100%" class="video-js vjs-default-skin" controls>
+                    <source src="{{ls.play_url}}" type="application/x-mpegURL">
+                </video>
 
-            <video controls="controls" autoplay="autoplay">
-                <source src="{{ls.play_url}}">
-                Your browser does not support the video tag.
-            </video>
+            </div>
+        </li>
             <li>{{ls.title}}</li>
             <li></li>
         {% endfor %}

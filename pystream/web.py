@@ -6,7 +6,8 @@ from flask import Flask, render_template, request, redirect
 app = Flask(__name__)
 app.debug = True
 url = 'http://jbp.qrjdfh.cn/'
-ps = pystream_class.Box(url, token='3e1fc304b8c2c9fd41fd6d1b7c3f445f')
+token = None
+ps = pystream_class.Box(url, token=token)
 ch = {}
 
 
@@ -26,6 +27,7 @@ def stream_lists(channel_title):
         return render_template('channel.html', stream_list=stream_list)
     else:
         return render_template('404.html')
+
 
 if __name__ == '__main__':
     app.run()
